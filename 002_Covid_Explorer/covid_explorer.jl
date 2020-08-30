@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.11.8
+# v0.11.9
 
 using Markdown
 using InteractiveUtils
@@ -13,8 +13,13 @@ macro bind(def, element)
     end
 end
 
-# ╔═╡ a4ce0cca-e48d-11ea-1139-fd789f4ce4b2
-using Pipe, Plots, PlutoUI
+# ╔═╡ 332dac9c-eaaa-11ea-0ba2-71960df3e69b
+begin
+	using Pkg
+	Pkg.activate(".")
+	import CSV, DataFrames, Dates
+	using Plots, PlutoUI
+end
 
 # ╔═╡ 7c1ae4f6-e520-11ea-21fe-c9ca8c946879
 md"# Covid Data Explorer"
@@ -30,17 +35,14 @@ md"""
  ### Data Processing:
 """
 
-# ╔═╡ 280bff10-e46e-11ea-3294-f770094227da
-import CSV, DataFrames, Dates
-
 # ╔═╡ 485ec478-e46e-11ea-2e64-d5f0fce53a55
 url = "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_global.csv";
 
 # ╔═╡ aeb604be-e495-11ea-04b8-1714bf90c5c6
 begin
 	download(url, "temp.csv")
-	data = @pipe CSV.read("temp.csv") |>
-		DataFrames.rename(_, 1 => "province", 2 => "country")
+	data = CSV.read("temp.csv") |>
+		df -> DataFrames.rename(df, 1 => "province", 2 => "country")
 	rm("temp.csv")
 end
 
@@ -61,30 +63,37 @@ end;
 countries = unique(data[:, :country]);
 
 # ╔═╡ 43859c78-e46f-11ea-3faf-4736e95c3123
-@bind selected_countries MultiSelect([ctry => ctry for ctry in countries])
+@bind selected_countries MultiSelect(
+	[ctry => ctry for ctry in countries],
+	default = ["US", "Brazil", "China", "Italy", "India"])
 
 # ╔═╡ c0ab7f52-e487-11ea-0ea1-bf41c0164efe
-data_by_country = @pipe data |>
-	DataFrames.groupby(_, :country) |>
-	DataFrames.combine(_, (date_labels .=> sum .=> date_labels));
+data_by_country = data |>
+	df -> DataFrames.groupby(df, :country) |>
+	df -> DataFrames.combine(df, (date_labels .=> sum .=> date_labels));
+
+# ╔═╡ f4e65194-eab2-11ea-24f3-d1e6005c7be4
+data_by_country;
 
 # ╔═╡ b2ef8cc0-e543-11ea-1937-97a3885f8421
 md"### Per Country Helper Functions"
 
-# ╔═╡ 99dd5ba0-e470-11ea-30ef-59db8fd89c12
-function get_country_data(country)
-	@pipe data_by_country |>
-		filter(:country => val -> val == country, _) |>
-		_[1, 2:end]|>
-		convert(Vector, _)
-end;
-
 # ╔═╡ ec5c80da-e543-11ea-2b4c-d7a3705f5fe5
 function make_first_plot()
-	plot()
-	xlabel!("Dates")
-	ylabel!("Confirmed Cases")
-	title!("Confirmed Covid 19 Cases")
+	base_plot = plot()
+	xlabel!(base_plot, "Dates")
+	ylabel!(base_plot, "Confirmed Cases")
+	title!(base_plot, "Confirmed Covid 19 Cases")
+	
+	base_plot
+end;
+
+# ╔═╡ 99dd5ba0-e470-11ea-30ef-59db8fd89c12
+function get_country_data(country)
+	data_by_country |>
+		df -> filter(:country => val -> val == country, df) |>
+		df -> df[1, 2:end]|>
+		df -> convert(Vector, df)
 end;
 
 # ╔═╡ b3235988-e539-11ea-2e44-37b53c7487ce
@@ -95,7 +104,8 @@ function add_plot!(target_plot, country, index)
 		xticks    = dates[1:12:end],
 		xrotation = 45,
 		legend = :topleft,
-		label = country)
+		label = country,
+		lw = 3)
 end;
 
 # ╔═╡ 5483a8fe-e48c-11ea-1d61-052ac9ffea8c
@@ -107,23 +117,29 @@ begin
 	output_plot
 end
 
+# ╔═╡ b8bddbdc-eab3-11ea-3bfe-e1f20ed6ea76
+data_by_country |>
+	df -> df[df.country .== "US", 2:end] |>
+	df -> convert(Vector, df[1, :]);
+
 # ╔═╡ Cell order:
 # ╟─7c1ae4f6-e520-11ea-21fe-c9ca8c946879
 # ╟─01588df4-e543-11ea-2c3f-cbd0692fae17
 # ╟─43859c78-e46f-11ea-3faf-4736e95c3123
 # ╟─1de1a642-e543-11ea-2bbf-798cc66e8251
 # ╟─80e9c0d4-e542-11ea-16d7-79ac439f210d
-# ╠═5483a8fe-e48c-11ea-1d61-052ac9ffea8c
+# ╟─5483a8fe-e48c-11ea-1d61-052ac9ffea8c
 # ╟─6c93faa8-e495-11ea-337c-17d4ef2987e3
-# ╠═280bff10-e46e-11ea-3294-f770094227da
-# ╠═a4ce0cca-e48d-11ea-1139-fd789f4ce4b2
+# ╠═332dac9c-eaaa-11ea-0ba2-71960df3e69b
 # ╠═485ec478-e46e-11ea-2e64-d5f0fce53a55
 # ╠═aeb604be-e495-11ea-04b8-1714bf90c5c6
 # ╠═c547edaa-e6c3-11ea-0aaf-d947e4b35954
 # ╠═5a513b56-e51e-11ea-06f3-77da2cc35859
 # ╠═ede54040-e51d-11ea-2c18-276764865533
 # ╠═c0ab7f52-e487-11ea-0ea1-bf41c0164efe
+# ╠═f4e65194-eab2-11ea-24f3-d1e6005c7be4
 # ╟─b2ef8cc0-e543-11ea-1937-97a3885f8421
-# ╠═99dd5ba0-e470-11ea-30ef-59db8fd89c12
 # ╠═ec5c80da-e543-11ea-2b4c-d7a3705f5fe5
 # ╠═b3235988-e539-11ea-2e44-37b53c7487ce
+# ╠═99dd5ba0-e470-11ea-30ef-59db8fd89c12
+# ╠═b8bddbdc-eab3-11ea-3bfe-e1f20ed6ea76
